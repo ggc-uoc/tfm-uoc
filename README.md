@@ -1,6 +1,6 @@
 # Estudi de la resiliència a llarg termini de la microbiota nasofaríngia i el seu paper en la transició de la colonització a la malaltia invasiva per bacteris patobionts
 
-**Autor**: Gerard González Comino
+**Autor**: Gerard González Comino;
 **Data**: 03-06-2026
 
 Codi desenvolupat durant el Treball de Fi de Màster (TFM) per al processament i l’anàlisi de dades de seqüenciació d’amplicons del gen 16S rRNA en mostres nasofaríngies, comparant mostres prepandèmiques i postpandèmiques en infants sans i infants amb MPI.

@@ -1,0 +1,1846 @@
+---
+title: "Estudi de la resiliència a llarg termini de la microbiota nasofaríngia i el seu paper en la transició de la colonització a la malaltia invasiva per bacteris patobionts"
+author: "Gerard González Comino"
+date: "03-06-2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+# Opcions per defecte dels chunks i configuració de la memòria cau
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      cache = TRUE,
+                      cache.path = "03_R/cache/")
+
+# Definició del directori de treball
+knitr::opts_knit$set(root.dir = "/media/micromolecular/Seagate Backup Plus Drive/estudios_microbiota/microbiota_FIS_2024_2026/")
+```
+
+# Configuració de l'entorn de treball
+
+## Càrrega de paquets
+
+```{r}
+library(tidyverse)
+library(qiime2R)
+library(decontam)
+library(vegan)
+library(ggsignif)
+library(patchwork)
+library(RColorBrewer)
+library(ANCOMBC)
+library(ggtext)
+```
+
+## Càrrega de dades
+
+```{r}
+# Lectura de la base de dades
+bbdd <- read_tsv(file = "00_bbdd/bbdd.tsv")
+```
+
+## Preparació de dades
+
+```{r}
+# Conversió de variables a factors o numèric i definició dels nivells de referència
+bbdd <- bbdd %>%
+  mutate(group = factor(group, levels = c("healthy", "IPD")),
+         study_period = factor(study_period, levels = c("postpandemic", "prepandemic")),
+         run = factor(run, levels = c("run1_pre", "run2_pre", "run3_pre", "run4_pre", "run1_post")),
+         age = as.numeric(age),
+         gender = factor(gender, levels = c("female", "male")),
+         pcr_anf_sp = factor(pcr_anf_sp, levels = c("Positive", "Negative")),
+         res_mvr = factor(res_mvr, levels = c("Positive", "Negative")),
+         coi_vir = factor(coi_vir, levels = c("viral_coinfection", "viral_monoinfection")),
+         rv_ent = factor(rv_ent, levels = c("Positive", "Negative")),
+         adv = factor(adv, levels = c("Positive", "Negative")),
+         bov = factor(bov, levels = c("Positive", "Negative")),
+         cov = factor(cov, levels = c("Positive", "Negative")),
+         ifv_a = factor(ifv_a, levels = c("Positive", "Negative")),
+         ifv_b = factor(ifv_b, levels = c("Positive", "Negative")),
+         ifv_a_b = factor(ifv_a_b, levels = c("Positive", "Negative")),
+         piv_1 = factor(piv_1, levels = c("Positive", "Negative")),
+         piv_2 = factor(piv_2, levels = c("Positive", "Negative")),
+         piv_3 = factor(piv_3, levels = c("Positive", "Negative")),
+         piv_4 = factor(piv_4, levels = c("Positive", "Negative")),
+         piv_1_2_3_4= factor(piv_1_2_3_4, levels = c("Positive", "Negative")),
+         vrs = factor(vrs, levels = c("Positive", "Negative")),
+         mpnv = factor(mpnv, levels = c("Positive", "Negative")))
+```
+
+# Anàlisi descriptiva
+
+## Infants sans
+
+```{r}
+# Subconjunt d'infants sans
+healthy <- bbdd %>% filter(group == "healthy")
+
+# ===EDAT===
+healthy %>%
+  group_by(study_period) %>%
+  summarise(n = n(),
+            mediana = round(median(age), 1),
+            Q1 = round(quantile(age, 0.25), 1),
+            Q3 = round(quantile(age, 0.75), 1),
+            minim = round(min(age), 1),
+            maxim = round(max(age), 1))
+
+# Test de normalitat
+shapiro.test(healthy$age[healthy$study_period == "postpandemic"])
+shapiro.test(healthy$age[healthy$study_period == "prepandemic"])
+
+# Test no paramètric
+wilcox.test(age ~ study_period, data = healthy)
+
+# ===SEXE===
+table(healthy$study_period, healthy$gender)
+round(prop.table(table(healthy$study_period, healthy$gender), margin = 1) * 100, 1)
+chisq.test(table(healthy$study_period, healthy$gender))
+
+# ===PORTADOR SP NASOFARINGE===
+table(healthy$study_period, healthy$pcr_anf_sp)
+round(prop.table(table(healthy$study_period, healthy$pcr_anf_sp), margin = 1) * 100, 1)
+chisq.test(table(healthy$study_period, healthy$pcr_anf_sp))
+
+# ===DNA/RNA VIRAL NASOFARINGE===
+table(healthy$study_period, healthy$res_mvr)
+round(prop.table(table(healthy$study_period, healthy$res_mvr), margin = 1) * 100, 1)
+chisq.test(table(healthy$study_period, healthy$res_mvr))
+
+# ===COINFECCIÓ VIRAL===
+table(healthy$study_period, healthy$coi_vir)
+round(prop.table(table(healthy$study_period, healthy$coi_vir), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$coi_vir))
+
+# ===RV/ENT===
+table(healthy$study_period, healthy$rv_ent)
+round(prop.table(table(healthy$study_period, healthy$rv_ent), margin = 1) * 100, 1)
+chisq.test(table(healthy$study_period, healthy$rv_ent))
+
+# ===ADV===
+table(healthy$study_period, healthy$adv)
+round(prop.table(table(healthy$study_period, healthy$adv), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$adv))
+
+# ===BOV===
+table(healthy$study_period, healthy$bov)
+round(prop.table(table(healthy$study_period, healthy$bov), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$bov))
+
+# ===COV===
+table(healthy$study_period, healthy$cov)
+round(prop.table(table(healthy$study_period, healthy$cov), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$cov))
+
+# ===IF A===
+table(healthy$study_period, healthy$ifv_a)
+round(prop.table(table(healthy$study_period, healthy$ifv_a), margin = 1) * 100, 1)
+
+# ===IF B===
+table(healthy$study_period, healthy$ifv_b)
+round(prop.table(table(healthy$study_period, healthy$ifv_b), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$ifv_b))
+
+# ===IF A/B===
+table(healthy$study_period, healthy$ifv_a_b)
+round(prop.table(table(healthy$study_period, healthy$ifv_a_b), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$ifv_a_b))
+
+# ===PIV 1===
+table(healthy$study_period, healthy$piv_1)
+round(prop.table(table(healthy$study_period, healthy$piv_1), margin = 1) * 100, 1)
+
+# ===PIV 2===
+table(healthy$study_period, healthy$piv_2)
+round(prop.table(table(healthy$study_period, healthy$piv_2), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$piv_2))
+
+# ===PIV 3===
+table(healthy$study_period, healthy$piv_3)
+round(prop.table(table(healthy$study_period, healthy$piv_3), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$piv_3))
+
+# ===PIV 4===
+table(healthy$study_period, healthy$piv_4)
+round(prop.table(table(healthy$study_period, healthy$piv_4), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$piv_4))
+
+# ===PIV 1/2/3/4===
+table(healthy$study_period, healthy$piv_1_2_3_4)
+round(prop.table(table(healthy$study_period, healthy$piv_1_2_3_4), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$piv_1_2_3_4))
+
+# ===VRS===
+table(healthy$study_period, healthy$vrs)
+round(prop.table(table(healthy$study_period, healthy$vrs), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$vrs))
+
+# ===MPV===
+table(healthy$study_period, healthy$mpnv)
+round(prop.table(table(healthy$study_period, healthy$mpnv), margin = 1) * 100, 1)
+fisher.test(table(healthy$study_period, healthy$mpnv))
+```
+
+## Infants amb MPI
+
+```{r}
+# Subconjunt d'infants amb MPI
+IPD <- bbdd %>% filter(group == "IPD")
+
+# ===EDAT===
+IPD %>%
+  group_by(study_period) %>%
+  summarise(n = n(),
+            mediana = round(median(age), 1),
+            Q1 = round(quantile(age, 0.25), 1),
+            Q3 = round(quantile(age, 0.75), 1),
+            minim = round(min(age), 1),
+            maxim = round(max(age), 1))
+
+# Test de normalitat
+shapiro.test(IPD$age[IPD$study_period == "postpandemic"])
+shapiro.test(IPD$age[IPD$study_period == "prepandemic"])
+
+# Test no paramètric
+wilcox.test(age ~ study_period, data = IPD)
+
+# ===SEXE===
+table(IPD$study_period, IPD$gender)
+round(prop.table(table(IPD$study_period, IPD$gender), margin = 1) * 100, 1)
+chisq.test(table(IPD$study_period, IPD$gender))
+
+# ===PORTADOR SP NASOFARINGE===
+table(IPD$study_period, IPD$pcr_anf_sp)
+round(prop.table(table(IPD$study_period, IPD$pcr_anf_sp), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$pcr_anf_sp))
+
+# ===DNA/RNA VIRAL NASOFARINGE===
+table(IPD$study_period, IPD$res_mvr)
+round(prop.table(table(IPD$study_period, IPD$res_mvr), margin = 1) * 100, 1)
+chisq.test(table(IPD$study_period, IPD$res_mvr))
+
+# ===COINFECCIÓ VIRAL===
+table(IPD$study_period, IPD$coi_vir)
+round(prop.table(table(IPD$study_period, IPD$coi_vir), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$coi_vir))
+
+# ===RV/ENT===
+table(IPD$study_period, IPD$rv_ent)
+round(prop.table(table(IPD$study_period, IPD$rv_ent), margin = 1) * 100, 1)
+chisq.test(table(IPD$study_period, IPD$rv_ent))
+
+# ===ADV===
+table(IPD$study_period, IPD$adv)
+round(prop.table(table(IPD$study_period, IPD$adv), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$adv))
+
+# ===BOV===
+table(IPD$study_period, IPD$bov)
+round(prop.table(table(IPD$study_period, IPD$bov), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$bov))
+
+# ===COV===
+table(IPD$study_period, IPD$cov)
+round(prop.table(table(IPD$study_period, IPD$cov), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$cov))
+
+# ===IF A===
+table(IPD$study_period, IPD$ifv_a)
+round(prop.table(table(IPD$study_period, IPD$ifv_a), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$ifv_a))
+
+# ===IF B===
+table(IPD$study_period, IPD$ifv_b)
+round(prop.table(table(IPD$study_period, IPD$ifv_b), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$ifv_b))
+
+# ===IF A/B===
+table(IPD$study_period, IPD$ifv_a_b)
+round(prop.table(table(IPD$study_period, IPD$ifv_a_b), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$ifv_a_b))
+
+# ===PIV 1===
+table(IPD$study_period, IPD$piv_1)
+round(prop.table(table(IPD$study_period, IPD$piv_1), margin = 1) * 100, 1)
+
+# ===PIV 2===
+table(IPD$study_period, IPD$piv_2)
+round(prop.table(table(IPD$study_period, IPD$piv_2), margin = 1) * 100, 1)
+
+# ===PIV 3===
+table(IPD$study_period, IPD$piv_3)
+round(prop.table(table(IPD$study_period, IPD$piv_3), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$piv_3))
+
+# ===PIV 4===
+table(IPD$study_period, IPD$piv_4)
+round(prop.table(table(IPD$study_period, IPD$piv_4), margin = 1) * 100, 1)
+
+# ===PIV 1/2/3/4===
+table(IPD$study_period, IPD$piv_1_2_3_4)
+round(prop.table(table(IPD$study_period, IPD$piv_1_2_3_4), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$piv_1_2_3_4))
+
+# ===VRS===
+table(IPD$study_period, IPD$vrs)
+round(prop.table(table(IPD$study_period, IPD$vrs), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$vrs))
+
+# ===MPV===
+table(IPD$study_period, IPD$mpnv)
+round(prop.table(table(IPD$study_period, IPD$mpnv), margin = 1) * 100, 1)
+fisher.test(table(IPD$study_period, IPD$mpnv))
+```
+
+# Identificació d'ASV contaminants
+
+## Detecció amb decontam (mètode de prevalença)
+
+```{r}
+# ===run1_pre===
+table_run1_pre <- read_q2biom("02_qiime2/03_dada2/table_run1_pre/feature-table.biom")
+metadata_decontam_run1_pre <- read_tsv("02_qiime2/04_decontam/metadata_decontam_run1_pre.tsv")
+metadata_decontam_run1_pre$is_neg <- metadata_decontam_run1_pre$sample_type == "cneg"
+decontam_run1_pre <- isContaminant(t(table_run1_pre),
+                                   method = "prevalence",
+                                   neg = metadata_decontam_run1_pre$is_neg)
+decontam_contaminants_run1_pre <- rownames(decontam_run1_pre)[decontam_run1_pre$contaminant]
+
+# ===run2_pre===
+table_run2_pre <- read_q2biom("02_qiime2/03_dada2/table_run2_pre/feature-table.biom")
+metadata_decontam_run2_pre <- read_tsv("02_qiime2/04_decontam/metadata_decontam_run2_pre.tsv")
+metadata_decontam_run2_pre$is_neg <- metadata_decontam_run2_pre$sample_type == "cneg"
+decontam_run2_pre <- isContaminant(t(table_run2_pre),
+                                   method = "prevalence",
+                                   neg = metadata_decontam_run2_pre$is_neg)
+decontam_contaminants_run2_pre <- rownames(decontam_run2_pre)[decontam_run2_pre$contaminant]
+
+# ===run3_pre===
+table_run3_pre <- read_q2biom("02_qiime2/03_dada2/table_run3_pre/feature-table.biom")
+metadata_decontam_run3_pre <- read_tsv("02_qiime2/04_decontam/metadata_decontam_run3_pre.tsv")
+metadata_decontam_run3_pre$is_neg <- metadata_decontam_run3_pre$sample_type == "cneg"
+decontam_run3_pre <- isContaminant(t(table_run3_pre),
+                                   method = "prevalence",
+                                   neg = metadata_decontam_run3_pre$is_neg)
+decontam_contaminants_run3_pre <- rownames(decontam_run3_pre)[decontam_run3_pre$contaminant]
+
+# ===run4_pre===
+table_run4_pre <- read_q2biom("02_qiime2/03_dada2/table_run4_pre/feature-table.biom")
+metadata_decontam_run4_pre <- read_tsv("02_qiime2/04_decontam/metadata_decontam_run4_pre.tsv")
+metadata_decontam_run4_pre$is_neg <- metadata_decontam_run4_pre$sample_type == "cneg"
+decontam_run4_pre <- isContaminant(t(table_run4_pre),
+                                   method = "prevalence",
+                                   neg = metadata_decontam_run4_pre$is_neg)
+decontam_contaminants_run4_pre <- rownames(decontam_run4_pre)[decontam_run4_pre$contaminant]
+
+# ===run1_post===
+table_run1_post <- read_q2biom("02_qiime2/03_dada2/table_run1_post/feature-table.biom")
+metadata_decontam_run1_post <- read_tsv("02_qiime2/04_decontam/metadata_decontam_run1_post.tsv")
+metadata_decontam_run1_post$is_neg <- metadata_decontam_run1_post$sample_type == "cneg"
+decontam_run1_post <- isContaminant(t(table_run1_post),
+                                   method = "prevalence",
+                                   neg = metadata_decontam_run1_post$is_neg)
+decontam_contaminants_run1_post <- rownames(decontam_run1_post)[decontam_run1_post$contaminant]
+```
+
+## Detecció per ràtio d'abundància (llindar 1:3)
+
+```{r}
+# ===run1_pre===
+rownames(metadata_decontam_run1_pre) <- metadata_decontam_run1_pre$`sample-id`
+metadata_decontam_run1_pre <- metadata_decontam_run1_pre[colnames(table_run1_pre), ]
+ratio_run1_pre <- apply(table_run1_pre[, metadata_decontam_run1_pre$is_neg, drop=FALSE], 1, median) /
+                  apply(table_run1_pre[, !metadata_decontam_run1_pre$is_neg, drop=FALSE], 1, median)
+ratio_run1_pre[is.nan(ratio_run1_pre)] <- 0
+result_run1_pre <- data.frame(ASV = names(ratio_run1_pre),
+                              ratio = ratio_run1_pre)
+result_run1_pre <- result_run1_pre[order(-result_run1_pre$ratio), ]
+ratio_contaminants_run1_pre <- result_run1_pre$ASV[result_run1_pre$ratio >= 3]
+
+# ===run2_pre===
+rownames(metadata_decontam_run2_pre) <- metadata_decontam_run2_pre$`sample-id`
+metadata_decontam_run2_pre <- metadata_decontam_run2_pre[colnames(table_run2_pre), ]
+ratio_run2_pre <- apply(table_run2_pre[, metadata_decontam_run2_pre$is_neg, drop=FALSE], 1, median) /
+                  apply(table_run2_pre[, !metadata_decontam_run2_pre$is_neg, drop=FALSE], 1, median)
+ratio_run2_pre[is.nan(ratio_run2_pre)] <- 0
+result_run2_pre <- data.frame(ASV = names(ratio_run2_pre),
+                              ratio = ratio_run2_pre)
+result_run2_pre <- result_run2_pre[order(-result_run2_pre$ratio), ]
+ratio_contaminants_run2_pre <- result_run2_pre$ASV[result_run2_pre$ratio >= 3]
+
+# ===run3_pre===
+rownames(metadata_decontam_run3_pre) <- metadata_decontam_run3_pre$`sample-id`
+metadata_decontam_run3_pre <- metadata_decontam_run3_pre[colnames(table_run3_pre), ]
+ratio_run3_pre <- apply(table_run3_pre[, metadata_decontam_run3_pre$is_neg, drop=FALSE], 1, median) /
+                  apply(table_run3_pre[, !metadata_decontam_run3_pre$is_neg, drop=FALSE], 1, median)
+ratio_run3_pre[is.nan(ratio_run3_pre)] <- 0
+result_run3_pre <- data.frame(ASV = names(ratio_run3_pre),
+                              ratio = ratio_run3_pre)
+result_run3_pre <- result_run3_pre[order(-result_run3_pre$ratio), ]
+ratio_contaminants_run3_pre <- result_run3_pre$ASV[result_run3_pre$ratio >= 3]
+
+# ===run4_pre===
+rownames(metadata_decontam_run4_pre) <- metadata_decontam_run4_pre$`sample-id`
+metadata_decontam_run4_pre <- metadata_decontam_run4_pre[colnames(table_run4_pre), ]
+ratio_run4_pre <- apply(table_run4_pre[, metadata_decontam_run4_pre$is_neg, drop=FALSE], 1, median) /
+                  apply(table_run4_pre[, !metadata_decontam_run4_pre$is_neg, drop=FALSE], 1, median)
+ratio_run4_pre[is.nan(ratio_run4_pre)] <- 0
+result_run4_pre <- data.frame(ASV = names(ratio_run4_pre),
+                              ratio = ratio_run4_pre)
+result_run4_pre <- result_run4_pre[order(-result_run4_pre$ratio), ]
+ratio_contaminants_run4_pre <- result_run4_pre$ASV[result_run4_pre$ratio >= 3]
+
+# ===run1_post===
+rownames(metadata_decontam_run1_post) <- metadata_decontam_run1_post$`sample-id`
+metadata_decontam_run1_post <- metadata_decontam_run1_post[colnames(table_run1_post), ]
+ratio_run1_post <- apply(table_run1_post[, metadata_decontam_run1_post$is_neg, drop=FALSE], 1, median) /
+                  apply(table_run1_post[, !metadata_decontam_run1_post$is_neg, drop=FALSE], 1, median)
+ratio_run1_post[is.nan(ratio_run1_post)] <- 0
+result_run1_post <- data.frame(ASV = names(ratio_run1_post),
+                              ratio = ratio_run1_post)
+result_run1_post <- result_run1_post[order(-result_run1_post$ratio), ]
+ratio_contaminants_run1_post <- result_run1_post$ASV[result_run1_post$ratio >= 3]
+```
+
+## Llista d'ASV contaminants per run
+
+```{r}
+# ===run1_pre===
+contaminants_run1_pre <- unique(c(decontam_contaminants_run1_pre, ratio_contaminants_run1_pre))
+contaminants_run1_pre_df <- data.frame(FeatureID = contaminants_run1_pre)
+write.table(contaminants_run1_pre_df,
+            file = "02_qiime2/04_decontam/contaminants_run1_pre.tsv",
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+
+# ===run2_pre===
+contaminants_run2_pre <- unique(c(decontam_contaminants_run2_pre, ratio_contaminants_run2_pre))
+contaminants_run2_pre_df <- data.frame(FeatureID = contaminants_run2_pre)
+write.table(contaminants_run2_pre_df,
+            file = "02_qiime2/04_decontam/contaminants_run2_pre.tsv",
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+
+# ===run3_pre===
+contaminants_run3_pre <- unique(c(decontam_contaminants_run3_pre, ratio_contaminants_run3_pre))
+contaminants_run3_pre_df <- data.frame(FeatureID = contaminants_run3_pre)
+write.table(contaminants_run3_pre_df,
+            file = "02_qiime2/04_decontam/contaminants_run3_pre.tsv",
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+
+# ===run4_pre===
+contaminants_run4_pre <- unique(c(decontam_contaminants_run4_pre, ratio_contaminants_run4_pre))
+contaminants_run4_pre_df <- data.frame(FeatureID = contaminants_run4_pre)
+write.table(contaminants_run4_pre_df,
+            file = "02_qiime2/04_decontam/contaminants_run4_pre.tsv",
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+
+# ===run1_post===
+contaminants_run1_post <- unique(c(decontam_contaminants_run1_post, ratio_contaminants_run1_post))
+contaminants_run1_post_df <- data.frame(FeatureID = contaminants_run1_post)
+write.table(contaminants_run1_post_df,
+            file = "02_qiime2/04_decontam/contaminants_run1_post.tsv",
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE)
+```
+
+# Abundància relativa mitjana dels principals gèneres bacterians
+
+## Infants sans
+
+```{r, fig.width=5, fig.height=5}
+# Càrrega de la taula d'ASV col·lapsada a nivell de gènere
+# i exclusió de la mostra B186, que no va assolir la profunditat de rarefacció
+table_l6_healthy <- read_q2biom(file = "02_qiime2/08_split_samples/healthy_table_l6/feature-table.biom")
+table_l6_healthy <- table_l6_healthy[, colnames(table_l6_healthy) != "B186"]
+
+# Obtenció del període d'estudi de cada mostra
+groups_healthy <- bbdd$study_period[match(colnames(table_l6_healthy), bbdd$`#SampleID`)]
+
+# Separació de les mostres per període d'estudi
+post_samples_healthy <- table_l6_healthy[, groups_healthy == "postpandemic"]
+pre_samples_healthy  <- table_l6_healthy[, groups_healthy == "prepandemic"]
+
+# Abundància relativa mitjana per mostra
+rel_post_healthy <- apply(post_samples_healthy, 2, function(x) x / sum(x) * 100)
+rel_pre_healthy  <- apply(pre_samples_healthy, 2, function(x) x / sum(x) * 100)
+
+# Resum del període postpandèmic
+post_healthy <- data.frame(Genus = rownames(post_samples_healthy),
+                           Mean = round(rowMeans(rel_post_healthy), 1),
+                           SD = round(apply(rel_post_healthy, 1, sd), 1))
+post_healthy <- post_healthy[order(-post_healthy$Mean), ]
+post_top_healthy <- post_healthy[1:10, ]
+post_others_healthy <- data.frame(Genus = "Altres",
+                                  Mean = sum(post_healthy$Mean[-(1:10)]),
+                                  SD = NA)
+post_healthy <- rbind(post_top_healthy, post_others_healthy)
+
+# Resum del període prepandèmic
+pre_healthy <- data.frame(Genus = rownames(pre_samples_healthy),
+                          Mean = round(rowMeans(rel_pre_healthy), 1),
+                          SD = round(apply(rel_pre_healthy, 1, sd), 1))
+pre_healthy <- pre_healthy[order(-pre_healthy$Mean), ]
+pre_top_healthy <- pre_healthy[1:10, ]
+pre_others_healthy <- data.frame(Genus = "Altres",
+                                 Mean = sum(pre_healthy$Mean[-(1:10)]),
+                                 SD = NA)
+pre_healthy <- rbind(pre_top_healthy, pre_others_healthy)
+
+# Reanomenem els gèneres principals
+post_healthy$Genus <- c("Moraxella_C_651924",
+                        "Haemophilus_D_734546",
+                        "Streptococcus",
+                        "Moraxella_C_651731",
+                        "Dolosigranulum",
+                        "Corynebacterium",
+                        "Família Neisseriaceae",
+                        "Família Pasteurellaceae",
+                        "Staphylococcus",
+                        "Alloprevotella",
+                        "Altres")
+
+pre_healthy$Genus <- c("Moraxella_C_651924",
+                        "Haemophilus_D_734546",
+                        "Streptococcus",
+                        "Dolosigranulum",
+                        "Moraxella_C_651731",
+                        "Neisseria_563205",
+                        "Staphylococcus",
+                        "Haemophilus_D_736121",
+                        "Corynebacterium",
+                        "Prevotella",
+                        "Altres")
+
+# Combinació dels dos períodes
+post_healthy$Group <- "Postpandèmia"
+pre_healthy$Group  <- "Prepandèmia"
+df_all_healthy <- rbind(post_healthy, pre_healthy)
+df_all_healthy$Group <- factor(df_all_healthy$Group, levels = c("Postpandèmia", "Prepandèmia"))
+
+# Ordenació dels gèneres
+orden_healthy <- c(post_healthy$Genus, setdiff(pre_healthy$Genus, post_healthy$Genus))
+orden_healthy <- c(setdiff(orden_healthy, "Altres"), "Altres")
+df_all_healthy$Genus <- factor(df_all_healthy$Genus, levels = orden_healthy)
+
+# Assignació de la paleta de colors
+taxa_healthy <- unique(df_all_healthy$Genus)
+pal_healthy <- colorRampPalette(brewer.pal(12, "Paired"))(length(taxa_healthy))
+colores_healthy <- setNames(pal_healthy, taxa_healthy)
+colores_healthy["Altres"] <- "lightgrey"
+
+# Gràfic
+p_genus_healthy <- ggplot(df_all_healthy, aes(x = Group, y = Mean, fill = fct_rev(Genus))) +
+                   geom_bar(stat = "identity", position = "stack", color = "black", linewidth = 0.4) +
+                   scale_fill_manual(values = colores_healthy,
+                                     labels = function(x) { ifelse(grepl("Família|Altres", x), x, parse(text = paste0("italic('", x, "')"))) }) +
+                   guides(fill = guide_legend(reverse = TRUE)) +
+                   theme_bw() +
+                   labs(x = "Període d'estudi", y = "Abundància relativa mitjana (%)", fill = "Gèneres", title = "Infants sans") +
+                   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+                         plot.title = element_text(size = 14, hjust = 0.5),
+                         axis.title = element_text(size = 13),
+                         legend.title = element_text(size = 14),
+                         legend.text = element_text(size = 12),
+                         axis.text = element_text(size = 10, colour = "black"),
+                         legend.position = "right",
+                         panel.border = element_rect(linewidth = 0.8))
+
+print(p_genus_healthy)
+ggsave("03_R/00_outputs/01_plots/p_genus_healthy.svg", p_genus_healthy, width = 5, height = 5, dpi = 300)
+```
+
+## Infants amb MPI
+
+```{r, fig.width=5, fig.height=5}
+# Càrrega de la taula d'ASV col·lapsada a nivell de gènere
+table_l6_IPD <- read_q2biom(file = "02_qiime2/08_split_samples/IPD_table_l6/feature-table.biom")
+
+# Obtenció del període d'estudi de cada mostra
+groups_IPD <- bbdd$study_period[match(colnames(table_l6_IPD), bbdd$`#SampleID`)]
+
+# Separació de les mostres per període d'estudi
+post_samples_IPD <- table_l6_IPD[, groups_IPD == "postpandemic"]
+pre_samples_IPD  <- table_l6_IPD[, groups_IPD == "prepandemic"]
+
+# Abundància relativa mitjana per mostra
+rel_post_IPD <- apply(post_samples_IPD, 2, function(x) x / sum(x) * 100)
+rel_pre_IPD  <- apply(pre_samples_IPD, 2, function(x) x / sum(x) * 100)
+
+# Resum del període postpandèmic
+post_IPD <- data.frame(Genus = rownames(post_samples_IPD),
+                       Mean = round(rowMeans(rel_post_IPD), 1),
+                       SD = round(apply(rel_post_IPD, 1, sd), 1))
+post_IPD <- post_IPD[order(-post_IPD$Mean), ]
+post_top_IPD <- post_IPD[1:10, ]
+post_others_IPD <- data.frame(Genus = "Altres",
+                              Mean = sum(post_IPD$Mean[-(1:10)]),
+                              SD = NA)
+post_IPD <- rbind(post_top_IPD, post_others_IPD)
+
+# Resum del període prepandèmic
+pre_IPD <- data.frame(Genus = rownames(pre_samples_IPD),
+                      Mean = round(rowMeans(rel_pre_IPD), 1),
+                      SD = round(apply(rel_pre_IPD, 1, sd), 1))
+pre_IPD <- pre_IPD[order(-pre_IPD$Mean), ]
+pre_top_IPD <- pre_IPD[1:10, ]
+pre_others_IPD <- data.frame(Genus = "Altres",
+                             Mean = sum(pre_IPD$Mean[-(1:10)]),
+                             SD = NA)
+pre_IPD <- rbind(pre_top_IPD, pre_others_IPD)
+
+# Reanomenem els gèneres principals
+post_IPD$Genus <- c("Moraxella_C_651924",
+                    "Streptococcus",
+                    "Corynebacterium",
+                    "Dolosigranulum",
+                    "Moraxella_C_651731",
+                    "Prevotella",
+                    "Haemophilus_D_734546",
+                    "Rothia",
+                    "Alloprevotella",
+                    "Staphylococcus",
+                    "Altres")
+
+pre_IPD$Genus <- c("Streptococcus",
+                   "Moraxella_C_651924",
+                   "Haemophilus_D_734546",
+                   "Família Pasteurellaceae",
+                   "Neisseria_563205",
+                   "Moraxella_C_651731",
+                   "Dolosigranulum",
+                   "Veillonella_A",
+                   "Família Rhizobiaceae",
+                   "Staphylococcus",
+                   "Altres")
+
+# Combinació dels dos períodes
+post_IPD$Group <- "Postpandèmia"
+pre_IPD$Group  <- "Prepandèmia"
+df_all_IPD <- rbind(pre_IPD, post_IPD)
+df_all_IPD$Group <- factor(df_all_IPD$Group, levels = c("Postpandèmia", "Prepandèmia"))
+
+# Ordenació dels gèneres
+orden_IPD <- c(post_IPD$Genus, setdiff(pre_IPD$Genus, post_IPD$Genus))
+orden_IPD <- c(setdiff(orden_IPD, "Altres"), "Altres")
+df_all_IPD$Genus <- factor(df_all_IPD$Genus, levels = orden_IPD)
+
+# Assignació de la paleta de colors
+taxa_IPD <- unique(df_all_IPD$Genus)
+pal_IPD <- colorRampPalette(brewer.pal(12, "Paired"))(length(taxa_IPD))
+colores_IPD <- setNames(pal_IPD, taxa_IPD)
+colores_IPD["Altres"] <- "lightgrey"
+
+# Gràfic
+p_genus_IPD <- ggplot(df_all_IPD, aes(x = Group, y = Mean, fill = fct_rev(Genus))) +
+               geom_bar(stat = "identity", position = "stack", color = "black", linewidth = 0.4) +
+                        scale_fill_manual(values = colores_IPD, 
+                                          labels = function(x) { ifelse(grepl("Família|Altres", x), x, parse(text = paste0("italic('", x, "')"))) }) +
+               guides(fill = guide_legend(reverse = TRUE)) +
+               theme_bw() +
+               labs(x = "Període d'estudi", y = "Abundància relativa mitjana (%)", fill = "Gèneres", title = "Infants amb MPI") +
+               theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+                     plot.title = element_text(size = 14, hjust = 0.5),
+                     axis.title = element_text(size = 13),
+                     legend.title = element_text(size = 14),
+                     legend.text = element_text(size = 12),
+                     axis.text = element_text(size = 10, colour = "black"),
+                     legend.position = "right",
+                     panel.border = element_rect(linewidth = 0.8))
+
+print(p_genus_IPD)
+ggsave("03_R/00_outputs/01_plots/p_genus_IPD.svg", p_genus_IPD, width = 5, height = 5, dpi = 300)
+```
+
+# Alfa diversitat 
+
+## Infants sans
+
+```{r, fig.width=7, fig.height=5}
+# Importació dels vectors
+observed_features_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/observed_features_vector.qza")$data %>%
+  rownames_to_column("sample-id") %>%
+  as_tibble()
+shannon_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/shannon_vector.qza")$data %>%
+  rownames_to_column("sample-id") %>%
+  as_tibble()
+faith_pd_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/faith_pd_vector.qza")$data %>%
+  rownames_to_column("sample-id") %>%
+  as_tibble()
+pielou_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/evenness_vector.qza")$data %>%
+  rownames_to_column("sample-id") %>%
+  as_tibble()
+
+# Combinació dels vectors
+alpha_healthy <- observed_features_healthy %>%
+  full_join(shannon_healthy, by = "sample-id") %>%
+  full_join(faith_pd_healthy, by = "sample-id") %>%
+  full_join(pielou_healthy, by = "sample-id")
+
+# Combinació amb la metadata
+alpha_healthy_metadata <- alpha_healthy %>%
+  left_join(bbdd, by = c("sample-id" = "#SampleID"))
+
+# Recodificació de les variables per als models
+alpha_healthy_metadata$study_period <- relevel(alpha_healthy_metadata$study_period, ref = "prepandemic")
+alpha_healthy_metadata$gender <- relevel(alpha_healthy_metadata$gender, ref = "male")
+alpha_healthy_metadata$res_mvr <- relevel(alpha_healthy_metadata$res_mvr, ref = "Negative")
+
+# Observed
+# No ajustada
+wilcox_observed_healthy <- wilcox.test(observed_features ~ study_period, data = alpha_healthy_metadata)
+print(round(wilcox_observed_healthy$p.value, 3))
+# Ajustada
+model_observed_healthy <- lm(observed_features ~ study_period + age + gender + res_mvr, data = alpha_healthy_metadata)
+coef_table_observed_healthy <- summary(model_observed_healthy)$coefficients
+results_observed_healthy <- data.frame(Estimate = round(coef_table_observed_healthy[, "Estimate"], 3),
+                                       p_value  = round(coef_table_observed_healthy[, "Pr(>|t|)"], 3))
+print(results_observed_healthy)
+
+# Shannon
+# No ajustada
+wilcox_shannon_healthy <- wilcox.test(shannon_entropy ~ study_period, data = alpha_healthy_metadata)
+print(round(wilcox_shannon_healthy$p.value, 3))
+# Ajustada
+model_shannon_healthy <- lm(shannon_entropy ~ study_period + age + gender + res_mvr, data = alpha_healthy_metadata)
+coef_table_shannon_healthy <- summary(model_shannon_healthy)$coefficients
+results_shannon_healthy <- data.frame(Estimate = round(coef_table_shannon_healthy[, "Estimate"], 3),
+                                      p_value  = round(coef_table_shannon_healthy[, "Pr(>|t|)"], 3))
+print(results_shannon_healthy)
+
+# Faith PD
+# No ajustada
+wilcox_faith_pd_healthy <- wilcox.test(faith_pd ~ study_period, data = alpha_healthy_metadata)
+print(round(wilcox_faith_pd_healthy$p.value, 3))
+# Ajustada
+model_faith_pd_healthy <- lm(faith_pd ~ study_period + age + gender + res_mvr, data = alpha_healthy_metadata)
+coef_table_faith_pd_healthy <- summary(model_faith_pd_healthy)$coefficients
+results_faith_pd_healthy <- data.frame(Estimate = round(coef_table_faith_pd_healthy[, "Estimate"], 3),
+                                       p_value  = round(coef_table_faith_pd_healthy[, "Pr(>|t|)"], 3))
+print(results_faith_pd_healthy)
+
+# Pielou
+# No ajustada
+wilcox_pielou_healthy <- wilcox.test(pielou_evenness ~ study_period, data = alpha_healthy_metadata)
+print(round(wilcox_pielou_healthy$p.value, 3))
+# Ajustada
+model_pielou_healthy <- lm(pielou_evenness ~ study_period + age + gender + res_mvr, data = alpha_healthy_metadata)
+coef_table_pielou_healthy <- summary(model_pielou_healthy)$coefficients
+results_pielou_healthy <- data.frame(Estimate = round(coef_table_pielou_healthy[, "Estimate"], 3),
+                                     p_value  = round(coef_table_pielou_healthy[, "Pr(>|t|)"], 3))
+print(results_pielou_healthy)
+
+# Extracció dels valors p
+format_p <- function(p) {
+  if (p < 0.001) {
+    "p < 0.001"
+  } else {
+    paste0("p = ", format(round(p, 3), nsmall = 3))
+  }
+}
+
+p_obs_val_healthy <- format_p(wilcox_observed_healthy$p.value)
+p_sha_val_healthy <- format_p(wilcox_shannon_healthy$p.value)
+p_faith_val_healthy <- format_p(wilcox_faith_pd_healthy$p.value)
+p_piel_val_healthy <- format_p(wilcox_pielou_healthy$p.value)
+
+# Càlcul de les posicions del text dels valors p
+max_obs_healthy <- max(alpha_healthy_metadata$observed_features, na.rm = TRUE)
+max_sha_healthy <- max(alpha_healthy_metadata$shannon_entropy, na.rm = TRUE)
+max_faith_healthy <- max(alpha_healthy_metadata$faith_pd, na.rm = TRUE)
+max_piel_healthy <- max(alpha_healthy_metadata$pielou_evenness, na.rm = TRUE)
+
+# Paleta de colors compartida
+common_scale_healthy <- scale_color_manual(name = "Període d'estudi",
+                                           breaks = c("postpandemic", "prepandemic"),
+                                           values = c("postpandemic" = "#7B2CBF", "prepandemic" = "#2CA02C"),
+                                           labels = c("postpandemic" = "Postpandèmia", "prepandemic" = "Prepandèmia"))
+
+# Tema compartit
+common_theme_healthy <- theme(axis.text.x = element_blank(),
+                              axis.ticks.x = element_blank(),
+                              axis.title = element_blank(),
+                              plot.title = element_text(hjust = 0.5, size = 14),
+                              axis.text.y = element_text(size = 10, color = "black"),
+                              legend.title = element_text(size = 14),
+                              legend.text = element_text(size = 12),
+                              panel.border = element_rect(linewidth = 0.8))
+
+# Boxplots individuals
+# Observed
+p_observed_healthy <- ggplot(alpha_healthy_metadata, aes(study_period, observed_features, color = study_period)) +
+                      geom_boxplot() + 
+                      geom_point() +
+                      common_scale_healthy +
+                      scale_x_discrete(limits = c("postpandemic", "prepandemic")) +
+                      theme_bw() +
+                      ggtitle("Observed") +
+                      geom_signif(comparisons = list(c("postpandemic","prepandemic")),
+                                  annotations = p_obs_val_healthy, y_position = max_obs_healthy*1.05, color = "black") +
+                      common_theme_healthy
+
+# Shannon
+p_shannon_healthy <- ggplot(alpha_healthy_metadata, aes(study_period, shannon_entropy, color = study_period)) +
+                     geom_boxplot() +
+                     geom_point() +
+                     common_scale_healthy +
+                     scale_x_discrete(limits = c("postpandemic", "prepandemic")) +
+                     theme_bw() + 
+                     ggtitle("Shannon") +
+                     geom_signif(comparisons = list(c("postpandemic","prepandemic")),
+                                 annotations = p_sha_val_healthy, y_position = max_sha_healthy*1.05, color = "black") +
+                     common_theme_healthy
+
+# Faith PD
+p_faith_pd_healthy <- ggplot(alpha_healthy_metadata, aes(study_period, faith_pd, color = study_period)) +
+                      geom_boxplot() + 
+                      geom_point() +
+                      common_scale_healthy +
+                      scale_x_discrete(limits = c("postpandemic", "prepandemic")) +
+                      theme_bw() + 
+                      ggtitle("Faith PD") +
+                      geom_signif(comparisons = list(c("postpandemic","prepandemic")),
+                                  annotations = p_faith_val_healthy, y_position = max_faith_healthy*1.05, color = "black") +
+                      common_theme_healthy
+
+# Pielou
+p_evenness_healthy <- ggplot(alpha_healthy_metadata, aes(study_period, pielou_evenness, color = study_period)) +
+                      geom_boxplot() + 
+                      geom_point() +
+                      common_scale_healthy +
+                      scale_x_discrete(limits = c("postpandemic", "prepandemic")) +
+                      theme_bw() + 
+                      ggtitle("Pielou") +
+                      geom_signif(comparisons = list(c("postpandemic","prepandemic")),
+                                  annotations = p_piel_val_healthy, y_position = max_piel_healthy*1.05, color = "black") +
+                      common_theme_healthy
+
+# Gràfic conjunt
+p_alpha_healthy <- p_observed_healthy + p_shannon_healthy + p_faith_pd_healthy + p_evenness_healthy +
+                   plot_layout(guides = "collect", ncol = 4)
+
+print(p_alpha_healthy)
+ggsave("03_R/00_outputs/01_plots/p_alpha_healthy.svg", p_alpha_healthy, width = 7, height = 5, dpi = 300)
+```
+
+## Infants amb MPI
+
+```{r, fig.width=7, fig.height=5}
+# Importació dels vectors
+observed_features_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/observed_features_vector.qza")$data %>%
+  rownames_to_column("sample-id") %>%
+  as_tibble()
+shannon_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/shannon_vector.qza")$data %>%
+  rownames_to_column("sample-id") %>%
+  as_tibble()
+faith_pd_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/faith_pd_vector.qza")$data %>%
+  rownames_to_column("sample-id") %>%
+  as_tibble()
+pielou_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/evenness_vector.qza")$data %>%
+  rownames_to_column("sample-id") %>%
+  as_tibble()
+
+# Combinació dels vectors
+alpha_IPD <- observed_features_IPD %>%
+  full_join(shannon_IPD, by = "sample-id") %>%
+  full_join(faith_pd_IPD, by = "sample-id") %>%
+  full_join(pielou_IPD, by = "sample-id")
+
+# Combinació amb la metadata
+alpha_IPD_metadata <- alpha_IPD %>%
+  left_join(bbdd, by = c("sample-id" = "#SampleID"))
+
+# Recodificació de les variables per als models
+alpha_IPD_metadata$study_period <- relevel(alpha_IPD_metadata$study_period, ref = "prepandemic")
+alpha_IPD_metadata$gender <- relevel(alpha_IPD_metadata$gender, ref = "male")
+alpha_IPD_metadata$res_mvr <- relevel(alpha_IPD_metadata$res_mvr, ref = "Negative")
+
+# Observed
+# No ajustada
+wilcox_observed_IPD <- wilcox.test(observed_features ~ study_period, data = alpha_IPD_metadata)
+print(round(wilcox_observed_IPD$p.value, 3))
+# Ajustada
+model_observed_IPD <- lm(observed_features ~ study_period + age + gender + res_mvr, data = alpha_IPD_metadata)
+coef_table_observed_IPD <- summary(model_observed_IPD)$coefficients
+results_observed_IPD <- data.frame(Estimate = round(coef_table_observed_IPD[, "Estimate"], 3),
+                                   p_value  = round(coef_table_observed_IPD[, "Pr(>|t|)"], 3))
+print(results_observed_IPD)
+
+# Shannon
+# No ajustada
+wilcox_shannon_IPD <- wilcox.test(shannon_entropy ~ study_period, data = alpha_IPD_metadata)
+print(round(wilcox_shannon_IPD$p.value, 3))
+# Ajustada
+model_shannon_IPD <- lm(shannon_entropy ~ study_period + age + gender + res_mvr, data = alpha_IPD_metadata)
+coef_table_shannon_IPD <- summary(model_shannon_IPD)$coefficients
+results_shannon_IPD <- data.frame(Estimate = round(coef_table_shannon_IPD[, "Estimate"], 3),
+                                  p_value  = round(coef_table_shannon_IPD[, "Pr(>|t|)"], 3))
+print(results_shannon_IPD)
+
+# Faith PD
+# No ajustada
+wilcox_faith_pd_IPD <- wilcox.test(faith_pd ~ study_period, data = alpha_IPD_metadata)
+print(round(wilcox_faith_pd_IPD$p.value, 3))
+# Ajustada
+model_faith_pd_IPD <- lm(faith_pd ~ study_period + age + gender + res_mvr, data = alpha_IPD_metadata)
+coef_table_faith_pd_IPD <- summary(model_faith_pd_IPD)$coefficients
+results_faith_pd_IPD <- data.frame(Estimate = round(coef_table_faith_pd_IPD[, "Estimate"], 3),
+                                   p_value  = round(coef_table_faith_pd_IPD[, "Pr(>|t|)"], 3))
+print(results_faith_pd_IPD)
+
+# Pielou
+# No ajustada
+wilcox_pielou_IPD <- wilcox.test(pielou_evenness ~ study_period, data = alpha_IPD_metadata)
+print(round(wilcox_pielou_IPD$p.value, 3))
+# Ajustada
+model_pielou_IPD <- lm(pielou_evenness ~ study_period + age + gender + res_mvr, data = alpha_IPD_metadata)
+coef_table_pielou_IPD <- summary(model_pielou_IPD)$coefficients
+results_pielou_IPD <- data.frame(Estimate = round(coef_table_pielou_IPD[, "Estimate"], 3),
+                                 p_value  = round(coef_table_pielou_IPD[, "Pr(>|t|)"], 3))
+print(results_pielou_IPD)
+
+# Extracció dels valors p
+p_obs_val_IPD <- format_p(wilcox_observed_IPD$p.value)
+p_sha_val_IPD <- format_p(wilcox_shannon_IPD$p.value)
+p_faith_val_IPD <- format_p(wilcox_faith_pd_IPD$p.value)
+p_piel_val_IPD <- format_p(wilcox_pielou_IPD$p.value)
+
+# Càlcul de les posicions del text dels valors p
+max_obs_IPD <- max(alpha_IPD_metadata$observed_features, na.rm = TRUE)
+max_sha_IPD <- max(alpha_IPD_metadata$shannon_entropy, na.rm = TRUE)
+max_faith_IPD <- max(alpha_IPD_metadata$faith_pd, na.rm = TRUE)
+max_piel_IPD <- max(alpha_IPD_metadata$pielou_evenness, na.rm = TRUE)
+
+# Paleta de colors compartida
+common_scale_IPD <- scale_color_manual(name = "Període d'estudi",
+                                       breaks = c("postpandemic", "prepandemic"),
+                                       values = c("postpandemic" = "#FF7F0E", "prepandemic" = "#1F77B4"),
+                                       labels = c("postpandemic" = "Postpandèmia", "prepandemic" = "Prepandèmia"))
+
+# Tema compartit
+common_theme_IPD <- theme(axis.text.x = element_blank(),
+                          axis.ticks.x = element_blank(),
+                          axis.title = element_blank(),
+                          plot.title = element_text(hjust = 0.5, size = 14),
+                          axis.text.y = element_text(size = 10, color = "black"),
+                          legend.title = element_text(size = 14),
+                          legend.text = element_text(size = 12),
+                          panel.border = element_rect(linewidth = 0.8))
+
+# Boxplots individuals
+# Observed
+p_observed_IPD <- ggplot(alpha_IPD_metadata, aes(study_period, observed_features, color = study_period)) +
+                  geom_boxplot() + 
+                  geom_point() +
+                  common_scale_IPD +
+                  scale_x_discrete(limits = c("postpandemic", "prepandemic")) +
+                  theme_bw() +
+                  ggtitle("Observed") +
+                  geom_signif(comparisons = list(c("postpandemic","prepandemic")),
+                              annotations = p_obs_val_IPD, y_position = max_obs_IPD*1.05, color = "black") +
+                  common_theme_IPD
+
+# Shannon
+p_shannon_IPD <- ggplot(alpha_IPD_metadata, aes(study_period, shannon_entropy, color = study_period)) +
+                 geom_boxplot() +
+                 geom_point() +
+                 common_scale_IPD +
+                 scale_x_discrete(limits = c("postpandemic", "prepandemic")) +
+                 theme_bw() + 
+                 ggtitle("Shannon") +
+                 geom_signif(comparisons = list(c("postpandemic","prepandemic")),
+                             annotations = p_sha_val_IPD, y_position = max_sha_IPD*1.05, color = "black") +
+                 common_theme_IPD
+
+# Faith PD
+p_faith_pd_IPD <- ggplot(alpha_IPD_metadata, aes(study_period, faith_pd, color = study_period)) +
+                  geom_boxplot() + 
+                  geom_point() +
+                  common_scale_IPD +
+                  scale_x_discrete(limits = c("postpandemic", "prepandemic")) +
+                  theme_bw() + 
+                  ggtitle("Faith PD") +
+                  geom_signif(comparisons = list(c("postpandemic","prepandemic")),
+                              annotations = p_faith_val_IPD, y_position = max_faith_IPD*1.05, color = "black") +
+                  common_theme_IPD
+
+# Pielou
+p_evenness_IPD <- ggplot(alpha_IPD_metadata, aes(study_period, pielou_evenness, color = study_period)) +
+                  geom_boxplot() + 
+                  geom_point() +
+                  common_scale_IPD +
+                  scale_x_discrete(limits = c("postpandemic", "prepandemic")) +
+                  theme_bw() + 
+                  ggtitle("Pielou") +
+                  geom_signif(comparisons = list(c("postpandemic","prepandemic")),
+                              annotations = p_piel_val_IPD, y_position = max_piel_IPD*1.05, color = "black") +
+                  common_theme_IPD
+
+# Gràfic conjunt
+p_alpha_IPD <- p_observed_IPD + p_shannon_IPD + p_faith_pd_IPD + p_evenness_IPD +
+               plot_layout(guides = "collect", ncol = 4)
+
+print(p_alpha_IPD)
+ggsave("03_R/00_outputs/01_plots/p_alpha_IPD.svg", p_alpha_IPD, width = 7, height = 5, dpi = 300)
+```
+
+# Beta diversitat 
+
+## Infants sans
+
+### Bray-Curtis
+
+```{r, fig.width=6.5, fig.height=5}
+# Fixació de la llavor (reproducibilitat de les permutacions)
+set.seed(123)
+
+# Recodificació de la variable període d'estudi per als gràfics
+alpha_healthy_metadata$study_period <- relevel(alpha_healthy_metadata$study_period, ref = "postpandemic")
+
+# Càrrega de la matriu de distàncies i de la PCoA
+bc_matrix_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/bray_curtis_distance_matrix.qza")$data
+bc_pcoa_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/bray_curtis_pcoa_results.qza")$data
+
+# Filtratge de les mostres amb valors mancants en les covariables
+bc_metadata_clean_healthy <- alpha_healthy_metadata %>%
+  drop_na(age, gender, res_mvr)
+bc_matrix_clean_healthy <- as.matrix(bc_matrix_healthy)[bc_metadata_clean_healthy$`sample-id`, bc_metadata_clean_healthy$`sample-id`] %>%
+    as.dist()
+
+# PERMANOVA no ajustada
+permanova_bc_healthy <- adonis2(bc_matrix_healthy ~ study_period, data = alpha_healthy_metadata, permutations = 999)
+print(paste("p =", round(permanova_bc_healthy$`Pr(>F)`[1], 3),
+            "R2 =", round(permanova_bc_healthy$R2[1], 3)))
+
+# PERMANOVA ajustada
+permanova_bc_model_healthy <- adonis2(bc_matrix_clean_healthy ~ study_period + age + gender + res_mvr, data = bc_metadata_clean_healthy, permutations = 999, by = "margin")
+print(data.frame(p  = round(permanova_bc_model_healthy$`Pr(>F)`, 3),
+                 R2 = round(permanova_bc_model_healthy$R2, 3),
+                 row.names = rownames(permanova_bc_model_healthy)))
+
+# Homogeneïtat de les dispersions (PERMDISP)
+disp_bc_healthy <- permutest(betadisper(bc_matrix_healthy, alpha_healthy_metadata$study_period), permutations = 999)
+round(disp_bc_healthy$tab["Groups", "Pr(>F)"], 3)
+
+# Extracció del valor R2
+format_r2 <- function(r2) {
+    paste0("R² = ", format(round(r2, 3), nsmall = 3))
+}
+
+# Etiqueta amb el valor p i la R2
+bc_label_healthy <- paste0(format_p(permanova_bc_healthy$`Pr(>F)`[1]), "\n", format_r2(permanova_bc_healthy$R2[1]))
+
+# Gràfic
+p_bc_healthy <- bc_pcoa_healthy$Vectors %>%
+    filter(SampleID %in% alpha_healthy_metadata$`sample-id`) %>%
+    left_join(alpha_healthy_metadata, by = c("SampleID" = "sample-id")) %>%
+    ggplot(aes(x = PC1, y = PC2, color = study_period, fill = study_period)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_point(size = 2.5) +
+    xlab(paste0("PC1: ", round(100 * bc_pcoa_healthy$ProportionExplained[1], 2), "%")) +
+    ylab(paste0("PC2: ", round(100 * bc_pcoa_healthy$ProportionExplained[2], 2), "%")) +
+    scale_color_manual(values = c("prepandemic" = "#2CA02C", "postpandemic" = "#7B2CBF"),
+                       labels = c("prepandemic" = "Prepandèmic", "postpandemic" = "Postpandèmic"),
+                       name = "Període d'estudi") +
+    scale_fill_manual(values = c("prepandemic" = "#2CA02C", "postpandemic" = "#7B2CBF"), 
+                      guide = "none") +
+    stat_ellipse(geom = "polygon", alpha = 0.1, aes(fill = study_period)) +
+    theme_bw() + 
+    ggtitle("PCoA (Bray-Curtis)") +
+    theme(plot.title = element_text(size = 14, hjust = 0.5),
+          axis.title = element_text(size = 13),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 10, color = "black"),
+          legend.position = "right",
+          panel.border = element_rect(linewidth = 0.8)) +
+    annotate("text", x = Inf, y = Inf, label = bc_label_healthy, 
+             hjust = 1.1, vjust = 1.5, size = 4)
+
+print(p_bc_healthy)
+ggsave("03_R/00_outputs/01_plots/p_bc_healthy.svg", p_bc_healthy, width = 6.5, height = 5, dpi = 300)
+```
+
+### Jaccard
+
+```{r, fig.width=6.5, fig.height=5}
+# Fixació de la llavor (reproductibilitat de les permutacions)
+set.seed(123)
+
+# Càrrega de la matriu de distàncies i de la PCoA
+jacc_matrix_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/jaccard_distance_matrix.qza")$data
+jacc_pcoa_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/jaccard_pcoa_results.qza")$data
+
+# Filtratge de les mostres amb valors mancants en les covariables
+jacc_metadata_clean_healthy <- alpha_healthy_metadata %>%
+  drop_na(age, gender, pcr_anf_sp, res_mvr)
+jacc_matrix_clean_healthy <- as.matrix(jacc_matrix_healthy)[jacc_metadata_clean_healthy$`sample-id`, jacc_metadata_clean_healthy$`sample-id`] %>%
+    as.dist()
+
+# PERMANOVA no ajustada
+permanova_jacc_healthy <- adonis2(jacc_matrix_healthy ~ study_period, data = alpha_healthy_metadata, permutations = 999)
+print(paste("p =", round(permanova_jacc_healthy$`Pr(>F)`[1], 3),
+            "R2 =", round(permanova_jacc_healthy$R2[1], 3)))
+
+# PERMANOVA ajustada
+permanova_jacc_model_healthy <- adonis2(jacc_matrix_clean_healthy ~ study_period + age + gender + res_mvr, data = jacc_metadata_clean_healthy, permutations = 999, by = "margin")
+print(data.frame(p  = round(permanova_jacc_model_healthy$`Pr(>F)`, 3),
+                 R2 = round(permanova_jacc_model_healthy$R2, 3),
+                 row.names = rownames(permanova_jacc_model_healthy)))
+
+# Homogeneïtat de les dispersions (PERMDISP)
+disp_jacc_healthy <- permutest(betadisper(jacc_matrix_healthy, alpha_healthy_metadata$study_period), permutations = 999)
+round(disp_jacc_healthy$tab["Groups", "Pr(>F)"], 3)
+
+# Etiqueta amb el valor p i la R2
+jacc_label_healthy <- paste0(format_p(permanova_jacc_healthy$`Pr(>F)`[1]), "\n", format_r2(permanova_jacc_healthy$R2[1]))
+
+# Gràfic
+p_jacc_healthy <- jacc_pcoa_healthy$Vectors %>%
+    filter(SampleID %in% alpha_healthy_metadata$`sample-id`) %>%
+    left_join(alpha_healthy_metadata, by = c("SampleID" = "sample-id")) %>%
+    ggplot(aes(x = PC1, y = PC2, color = study_period, fill = study_period)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_point(size = 2.5) +
+    xlab(paste0("PC1: ", round(100 * jacc_pcoa_healthy$ProportionExplained[1], 2), "%")) +
+    ylab(paste0("PC2: ", round(100 * jacc_pcoa_healthy$ProportionExplained[2], 2), "%")) +
+    scale_color_manual(values = c("prepandemic" = "#2CA02C", "postpandemic" = "#7B2CBF"),
+                       labels = c("prepandemic" = "Prepandèmic", "postpandemic" = "Postpandèmic"),
+                       name = "Període d'estudi") +
+    scale_fill_manual(values = c("prepandemic" = "#2CA02C", "postpandemic" = "#7B2CBF"), 
+                      guide = "none") +
+    stat_ellipse(geom = "polygon", alpha = 0.1, aes(fill = study_period)) +
+    theme_bw() + 
+    ggtitle("PCoA (Jaccard)") +
+    theme(plot.title = element_text(size = 14, hjust = 0.5),
+          axis.title = element_text(size = 13),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 10, color = "black"),
+          legend.position = "right",
+          panel.border = element_rect(linewidth = 0.8)) +
+    annotate("text", x = Inf, y = Inf, label = jacc_label_healthy, 
+             hjust = 1.1, vjust = 1.5, size = 4)
+
+print(p_jacc_healthy)
+ggsave("03_R/00_outputs/01_plots/p_jacc_healthy.svg", p_jacc_healthy, width = 6.5, height = 5, dpi = 300)
+```
+
+### Weighted UniFrac
+
+```{r, fig.width=6.5, fig.height=5}
+# Fixació de la llavor (reproductibilitat de les permutacions)
+set.seed(123)
+
+# Càrrega de la matriu de distàncies i de la PCoA
+wuni_matrix_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/weighted_unifrac_distance_matrix.qza")$data
+wuni_pcoa_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/weighted_unifrac_pcoa_results.qza")$data
+
+# Filtratge de les mostres amb valors mancants en les covariables
+wuni_metadata_clean_healthy <- alpha_healthy_metadata %>%
+  drop_na(age, gender, pcr_anf_sp, res_mvr)
+wuni_matrix_clean_healthy <- as.matrix(wuni_matrix_healthy)[wuni_metadata_clean_healthy$`sample-id`, wuni_metadata_clean_healthy$`sample-id`] %>%
+    as.dist()
+
+# PERMANOVA no ajustada
+permanova_wuni_healthy <- adonis2(wuni_matrix_healthy ~ study_period, data = alpha_healthy_metadata, permutations = 999)
+print(paste("p =", round(permanova_wuni_healthy$`Pr(>F)`[1], 3),
+            "R2 =", round(permanova_wuni_healthy$R2[1], 3)))
+
+# PERMANOVA ajustada
+permanova_wuni_model_healthy <- adonis2(wuni_matrix_clean_healthy ~ study_period + age + gender + res_mvr, data = wuni_metadata_clean_healthy, permutations = 999, by = "margin")
+print(data.frame(p  = round(permanova_wuni_model_healthy$`Pr(>F)`, 3),
+                 R2 = round(permanova_wuni_model_healthy$R2, 3),
+                 row.names = rownames(permanova_wuni_model_healthy)))
+
+# Homogeneïtat de les dispersions (PERMDISP)
+disp_wuni_healthy <- permutest(betadisper(wuni_matrix_healthy, alpha_healthy_metadata$study_period), permutations = 999)
+round(disp_wuni_healthy$tab["Groups", "Pr(>F)"], 3)
+
+# Etiqueta amb el valor p i la R2
+wuni_label_healthy <- paste0(format_p(permanova_wuni_healthy$`Pr(>F)`[1]), "\n", format_r2(permanova_wuni_healthy$R2[1]))
+
+# Gràfic
+p_wuni_healthy <- wuni_pcoa_healthy$Vectors %>%
+    filter(SampleID %in% alpha_healthy_metadata$`sample-id`) %>%
+    left_join(alpha_healthy_metadata, by = c("SampleID" = "sample-id")) %>%
+    ggplot(aes(x = PC1, y = PC2, color = study_period, fill = study_period)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_point(size = 2.5) +
+    xlab(paste0("PC1: ", round(100 * wuni_pcoa_healthy$ProportionExplained[1], 2), "%")) +
+    ylab(paste0("PC2: ", round(100 * wuni_pcoa_healthy$ProportionExplained[2], 2), "%")) +
+    scale_color_manual(values = c("prepandemic" = "#2CA02C", "postpandemic" = "#7B2CBF"),
+                       labels = c("prepandemic" = "Prepandèmic", "postpandemic" = "Postpandèmic"),
+                       name = "Període d'estudi") +
+    scale_fill_manual(values = c("prepandemic" = "#2CA02C", "postpandemic" = "#7B2CBF"), 
+                      guide = "none") +
+    stat_ellipse(geom = "polygon", alpha = 0.1, aes(fill = study_period)) +
+    theme_bw() + 
+    ggtitle("PCoA (weighted UniFrac)") +
+    theme(plot.title = element_text(size = 14, hjust = 0.5),
+          axis.title = element_text(size = 13),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 10, color = "black"),
+          legend.position = "right",
+          panel.border = element_rect(linewidth = 0.8)) +
+    annotate("text", x = Inf, y = Inf, label = wuni_label_healthy, 
+             hjust = 1.1, vjust = 1.5, size = 4)
+
+print(p_wuni_healthy)
+ggsave("03_R/00_outputs/01_plots/p_wuni_healthy.svg", p_wuni_healthy, width = 6.5, height = 5, dpi = 300)
+```
+
+### Unweighted UniFrac
+
+```{r, fig.width=6.5, fig.height=5}
+# Fixació de la llavor (reproductibilitat de les permutacions)
+set.seed(123)
+
+# Càrrega de la matriu de distàncies i de la PCoA
+unwuni_matrix_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/unweighted_unifrac_distance_matrix.qza")$data
+unwuni_pcoa_healthy <- read_qza("02_qiime2/10_diversity/healthy_core-metrics/unweighted_unifrac_pcoa_results.qza")$data
+
+# Filtratge de les mostres amb valors mancants en les covariables
+unwuni_metadata_clean_healthy <- alpha_healthy_metadata %>%
+  drop_na(age, gender, pcr_anf_sp, res_mvr)
+unwuni_matrix_clean_healthy <- as.matrix(unwuni_matrix_healthy)[unwuni_metadata_clean_healthy$`sample-id`, unwuni_metadata_clean_healthy$`sample-id`] %>%
+    as.dist()
+
+# PERMANOVA no ajustada
+permanova_unwuni_healthy <- adonis2(unwuni_matrix_healthy ~ study_period, data = alpha_healthy_metadata, permutations = 999)
+print(paste("p =", round(permanova_unwuni_healthy$`Pr(>F)`[1], 3),
+            "R2 =", round(permanova_unwuni_healthy$R2[1], 3)))
+
+# PERMANOVA ajustada
+permanova_unwuni_model_healthy <- adonis2(unwuni_matrix_clean_healthy ~ study_period + age + gender + res_mvr, data = unwuni_metadata_clean_healthy, permutations = 999, by = "margin")
+print(data.frame(p  = round(permanova_unwuni_model_healthy$`Pr(>F)`, 3),
+                 R2 = round(permanova_unwuni_model_healthy$R2, 3),
+                 row.names = rownames(permanova_unwuni_model_healthy)))
+
+# Homogeneïtat de les dispersions (PERMDISP)
+disp_unwuni_healthy <- permutest(betadisper(unwuni_matrix_healthy, alpha_healthy_metadata$study_period), permutations = 999)
+round(disp_unwuni_healthy$tab["Groups", "Pr(>F)"], 3)
+
+# Etiqueta amb el valor p i la R2
+unwuni_label_healthy <- paste0(format_p(permanova_unwuni_healthy$`Pr(>F)`[1]), "\n", format_r2(permanova_unwuni_healthy$R2[1]))
+
+# Gràfic
+p_unwuni_healthy <- unwuni_pcoa_healthy$Vectors %>%
+    filter(SampleID %in% alpha_healthy_metadata$`sample-id`) %>%
+    left_join(alpha_healthy_metadata, by = c("SampleID" = "sample-id")) %>%
+    ggplot(aes(x = PC1, y = PC2, color = study_period, fill = study_period)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_point(size = 2.5) +
+    xlab(paste0("PC1: ", round(100 * unwuni_pcoa_healthy$ProportionExplained[1], 2), "%")) +
+    ylab(paste0("PC2: ", round(100 * unwuni_pcoa_healthy$ProportionExplained[2], 2), "%")) +
+    scale_color_manual(values = c("prepandemic" = "#2CA02C", "postpandemic" = "#7B2CBF"),
+                       labels = c("prepandemic" = "Prepandèmic", "postpandemic" = "Postpandèmic"),
+                       name = "Període d'estudi") +
+    scale_fill_manual(values = c("prepandemic" = "#2CA02C", "postpandemic" = "#7B2CBF"), 
+                      guide = "none") +
+    stat_ellipse(geom = "polygon", alpha = 0.1, aes(fill = study_period)) +
+    theme_bw() + 
+    ggtitle("PCoA (unweighted UniFrac)") +
+    theme(plot.title = element_text(size = 14, hjust = 0.5),
+          axis.title = element_text(size = 13),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 10, color = "black"),
+          legend.position = "right",
+          panel.border = element_rect(linewidth = 0.8)) +
+    annotate("text", x = Inf, y = Inf, label = unwuni_label_healthy, 
+             hjust = 1.1, vjust = 1.5, size = 4)
+
+print(p_unwuni_healthy)
+ggsave("03_R/00_outputs/01_plots/p_unwuni_healthy.svg", p_unwuni_healthy, width = 6.5, height = 5, dpi = 300)
+```
+
+## Infants amb MPI
+
+### Bray-Curtis
+
+```{r, fig.width=6.5, fig.height=5}
+# Fixació de la llavor (reproducibilitat de les permutacions)
+set.seed(123)
+
+# Recodificació de la variable període d'estudi per als gràfics
+alpha_IPD_metadata$study_period <- relevel(alpha_IPD_metadata$study_period, ref = "postpandemic")
+
+# Càrrega de la matriu de distàncies i de la PCoA
+bc_matrix_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/bray_curtis_distance_matrix.qza")$data
+bc_pcoa_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/bray_curtis_pcoa_results.qza")$data
+
+# Filtratge de les mostres amb valors mancants en les covariables
+bc_metadata_clean_IPD <- alpha_IPD_metadata %>%
+  drop_na(age, gender, res_mvr)
+bc_matrix_clean_IPD <- as.matrix(bc_matrix_IPD)[bc_metadata_clean_IPD$`sample-id`, bc_metadata_clean_IPD$`sample-id`] %>%
+    as.dist()
+
+# PERMANOVA no ajustada
+permanova_bc_IPD <- adonis2(bc_matrix_IPD ~ study_period, data = alpha_IPD_metadata, permutations = 999)
+print(paste("p =", round(permanova_bc_IPD$`Pr(>F)`[1], 3),
+            "R2 =", round(permanova_bc_IPD$R2[1], 3)))
+
+# PERMANOVA ajustada
+permanova_bc_model_IPD <- adonis2(bc_matrix_clean_IPD ~ study_period + age + gender + res_mvr, data = bc_metadata_clean_IPD, permutations = 999, by = "margin")
+print(data.frame(p  = round(permanova_bc_model_IPD$`Pr(>F)`, 3),
+                 R2 = round(permanova_bc_model_IPD$R2, 3),
+                 row.names = rownames(permanova_bc_model_IPD)))
+
+# Homogeneïtat de les dispersions (PERMDISP)
+disp_bc_IPD <- permutest(betadisper(bc_matrix_IPD, alpha_IPD_metadata$study_period), permutations = 999)
+round(disp_bc_IPD$tab["Groups", "Pr(>F)"], 3)
+
+# Etiqueta amb el valor p i la R2
+bc_label_IPD <- paste0(format_p(permanova_bc_IPD$`Pr(>F)`[1]), "\n",       format_r2(permanova_bc_IPD$R2[1]))
+
+# Gràfic
+p_bc_IPD <- bc_pcoa_IPD$Vectors %>%
+    filter(SampleID %in% alpha_IPD_metadata$`sample-id`) %>%
+    left_join(alpha_IPD_metadata, by = c("SampleID" = "sample-id")) %>%
+    ggplot(aes(x = PC1, y = PC2, color = study_period, fill = study_period)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_point(size = 2.5) +
+    xlab(paste0("PC1: ", round(100 * bc_pcoa_IPD$ProportionExplained[1], 2), "%")) +
+    ylab(paste0("PC2: ", round(100 * bc_pcoa_IPD$ProportionExplained[2], 2), "%")) +
+    scale_color_manual(values = c("prepandemic" = "#1F77B4", "postpandemic" = "#FF7F0E"),
+                       labels = c("prepandemic" = "Prepandèmic", "postpandemic" = "Postpandèmic"),
+                       name = "Període d'estudi") +
+    scale_fill_manual(values = c("prepandemic" = "#1F77B4", "postpandemic" = "#FF7F0E"), 
+                      guide = "none") +
+    stat_ellipse(geom = "polygon", alpha = 0.1, aes(fill = study_period)) +
+    theme_bw() + 
+    ggtitle("PCoA (Bray-Curtis)") +
+    theme(plot.title = element_text(size = 14, hjust = 0.5),
+          axis.title = element_text(size = 13),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 10, color = "black"),
+          legend.position = "right",
+          panel.border = element_rect(linewidth = 0.8)) +
+    annotate("text", x = Inf, y = Inf, label = bc_label_IPD, 
+             hjust = 1.1, vjust = 1.5, size = 4)
+
+print(p_bc_IPD)
+ggsave("03_R/00_outputs/01_plots/p_bc_IPD.svg", p_bc_IPD, width = 6.5, height = 5, dpi = 300)
+```
+
+### Jaccard
+
+```{r, fig.width=6.5, fig.height=5}
+# Fixació de la llavor (reproducibilitat de les permutacions)
+set.seed(123)
+
+# Càrrega de la matriu de distàncies i de la PCoA
+jacc_matrix_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/jaccard_distance_matrix.qza")$data
+jacc_pcoa_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/jaccard_pcoa_results.qza")$data
+
+# Filtratge de les mostres amb valors mancants en les covariables
+jacc_metadata_clean_IPD <- alpha_IPD_metadata %>%
+  drop_na(age, gender, res_mvr)
+jacc_matrix_clean_IPD <- as.matrix(jacc_matrix_IPD)[jacc_metadata_clean_IPD$`sample-id`, jacc_metadata_clean_IPD$`sample-id`] %>%
+    as.dist()
+
+# PERMANOVA no ajustada
+permanova_jacc_IPD <- adonis2(jacc_matrix_IPD ~ study_period, data = alpha_IPD_metadata, permutations = 999)
+print(paste("p =", round(permanova_jacc_IPD$`Pr(>F)`[1], 3),
+            "R2 =", round(permanova_jacc_IPD$R2[1], 3)))
+
+# PERMANOVA ajustada
+permanova_jacc_model_IPD <- adonis2(jacc_matrix_clean_IPD ~ study_period + age + gender + res_mvr, data = jacc_metadata_clean_IPD, permutations = 999, by = "margin")
+print(data.frame(p  = round(permanova_jacc_model_IPD$`Pr(>F)`, 3),
+                 R2 = round(permanova_jacc_model_IPD$R2, 3),
+                 row.names = rownames(permanova_jacc_model_IPD)))
+
+# Homogeneïtat de les dispersions (PERMDISP)
+disp_jacc_IPD <- permutest(betadisper(jacc_matrix_IPD, alpha_IPD_metadata$study_period), permutations = 999)
+round(disp_jacc_IPD$tab["Groups", "Pr(>F)"], 3)
+
+# Etiqueta amb el valor p i la R2
+jacc_label_IPD <- paste0(format_p(permanova_jacc_IPD$`Pr(>F)`[1]), "\n",       format_r2(permanova_jacc_IPD$R2[1]))
+
+# Gràfic
+p_jacc_IPD <- jacc_pcoa_IPD$Vectors %>%
+    filter(SampleID %in% alpha_IPD_metadata$`sample-id`) %>%
+    left_join(alpha_IPD_metadata, by = c("SampleID" = "sample-id")) %>%
+    ggplot(aes(x = PC1, y = PC2, color = study_period, fill = study_period)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_point(size = 2.5) +
+    xlab(paste0("PC1: ", round(100 * jacc_pcoa_IPD$ProportionExplained[1], 2), "%")) +
+    ylab(paste0("PC2: ", round(100 * jacc_pcoa_IPD$ProportionExplained[2], 2), "%")) +
+    scale_color_manual(values = c("prepandemic" = "#1F77B4", "postpandemic" = "#FF7F0E"),
+                       labels = c("prepandemic" = "Prepandèmic", "postpandemic" = "Postpandèmic"),
+                       name = "Període d'estudi") +
+    scale_fill_manual(values = c("prepandemic" = "#1F77B4", "postpandemic" = "#FF7F0E"), 
+                      guide = "none") +
+    stat_ellipse(geom = "polygon", alpha = 0.1, aes(fill = study_period)) +
+    theme_bw() + 
+    ggtitle("PCoA (Jaccard)") +
+    theme(plot.title = element_text(size = 14, hjust = 0.5),
+          axis.title = element_text(size = 13),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 10, color = "black"),
+          legend.position = "right",
+          panel.border = element_rect(linewidth = 0.8)) +
+    annotate("text", x = Inf, y = Inf, label = jacc_label_IPD, 
+             hjust = 1.1, vjust = 1.5, size = 4)
+
+print(p_jacc_IPD)
+ggsave("03_R/00_outputs/01_plots/p_jacc_IPD.svg", p_jacc_IPD, width = 6.5, height = 5, dpi = 300)
+```
+
+### Weighted UniFrac
+
+```{r, fig.width=6.5, fig.height=5}
+# Fixació de la llavor (reproducibilitat de les permutacions)
+set.seed(123)
+
+# Càrrega de la matriu de distàncies i de la PCoA
+wuni_matrix_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/weighted_unifrac_distance_matrix.qza")$data
+wuni_pcoa_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/weighted_unifrac_pcoa_results.qza")$data
+
+# Filtratge de les mostres amb valors mancants en les covariables
+wuni_metadata_clean_IPD <- alpha_IPD_metadata %>%
+  drop_na(age, gender, res_mvr)
+wuni_matrix_clean_IPD <- as.matrix(wuni_matrix_IPD)[wuni_metadata_clean_IPD$`sample-id`, wuni_metadata_clean_IPD$`sample-id`] %>%
+    as.dist()
+
+# PERMANOVA no ajustada
+permanova_wuni_IPD <- adonis2(wuni_matrix_IPD ~ study_period, data = alpha_IPD_metadata, permutations = 999)
+print(paste("p =", round(permanova_wuni_IPD$`Pr(>F)`[1], 3),
+            "R2 =", round(permanova_wuni_IPD$R2[1], 3)))
+
+# PERMANOVA ajustada
+permanova_wuni_model_IPD <- adonis2(wuni_matrix_clean_IPD ~ study_period + age + gender + res_mvr, data = wuni_metadata_clean_IPD, permutations = 999, by = "margin")
+print(data.frame(p  = round(permanova_wuni_model_IPD$`Pr(>F)`, 3),
+                 R2 = round(permanova_wuni_model_IPD$R2, 3),
+                 row.names = rownames(permanova_wuni_model_IPD)))
+
+# Homogeneïtat de les dispersions (PERMDISP)
+disp_wuni_IPD <- permutest(betadisper(wuni_matrix_IPD, alpha_IPD_metadata$study_period), permutations = 999)
+round(disp_wuni_IPD$tab["Groups", "Pr(>F)"], 3)
+
+# Etiqueta amb el valor p i la R2
+wuni_label_IPD <- paste0(format_p(permanova_wuni_IPD$`Pr(>F)`[1]), "\n",       format_r2(permanova_wuni_IPD$R2[1]))
+
+# Gràfic
+p_wuni_IPD <- wuni_pcoa_IPD$Vectors %>%
+    filter(SampleID %in% alpha_IPD_metadata$`sample-id`) %>%
+    left_join(alpha_IPD_metadata, by = c("SampleID" = "sample-id")) %>%
+    ggplot(aes(x = PC1, y = PC2, color = study_period, fill = study_period)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_point(size = 2.5) +
+    xlab(paste0("PC1: ", round(100 * wuni_pcoa_IPD$ProportionExplained[1], 2), "%")) +
+    ylab(paste0("PC2: ", round(100 * wuni_pcoa_IPD$ProportionExplained[2], 2), "%")) +
+    scale_color_manual(values = c("prepandemic" = "#1F77B4", "postpandemic" = "#FF7F0E"),
+                       labels = c("prepandemic" = "Prepandèmic", "postpandemic" = "Postpandèmic"),
+                       name = "Període d'estudi") +
+    scale_fill_manual(values = c("prepandemic" = "#1F77B4", "postpandemic" = "#FF7F0E"), 
+                      guide = "none") +
+    stat_ellipse(geom = "polygon", alpha = 0.1, aes(fill = study_period)) +
+    theme_bw() + 
+    ggtitle("PCoA (weighted UniFrac)") +
+    theme(plot.title = element_text(size = 14, hjust = 0.5),
+          axis.title = element_text(size = 13),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 10, color = "black"),
+          legend.position = "right",
+          panel.border = element_rect(linewidth = 0.8)) +
+    annotate("text", x = Inf, y = Inf, label = wuni_label_IPD, 
+             hjust = 1.1, vjust = 1.5, size = 4)
+
+print(p_wuni_IPD)
+ggsave("03_R/00_outputs/01_plots/p_wuni_IPD.svg", p_wuni_IPD, width = 6.5, height = 5, dpi = 300)
+```
+
+### Unweighted UniFrac
+
+```{r, fig.width=6.5, fig.height=5}
+# Fixació de la llavor (reproducibilitat de les permutacions)
+set.seed(123)
+
+# Càrrega de la matriu de distàncies i de la PCoA
+unwuni_matrix_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/unweighted_unifrac_distance_matrix.qza")$data
+unwuni_pcoa_IPD <- read_qza("02_qiime2/10_diversity/IPD_core-metrics/unweighted_unifrac_pcoa_results.qza")$data
+
+# Filtratge de les mostres amb valors mancants en les covariables
+unwuni_metadata_clean_IPD <- alpha_IPD_metadata %>%
+  drop_na(age, gender, res_mvr)
+unwuni_matrix_clean_IPD <- as.matrix(unwuni_matrix_IPD)[unwuni_metadata_clean_IPD$`sample-id`, unwuni_metadata_clean_IPD$`sample-id`] %>%
+    as.dist()
+
+# PERMANOVA no ajustada
+permanova_unwuni_IPD <- adonis2(unwuni_matrix_IPD ~ study_period, data = alpha_IPD_metadata, permutations = 999)
+print(paste("p =", round(permanova_unwuni_IPD$`Pr(>F)`[1], 3),
+            "R2 =", round(permanova_unwuni_IPD$R2[1], 3)))
+
+# PERMANOVA ajustada
+permanova_unwuni_model_IPD <- adonis2(unwuni_matrix_clean_IPD ~ study_period + age + gender + res_mvr, data = unwuni_metadata_clean_IPD, permutations = 999, by = "margin")
+print(data.frame(p  = round(permanova_unwuni_model_IPD$`Pr(>F)`, 3),
+                 R2 = round(permanova_unwuni_model_IPD$R2, 3),
+                 row.names = rownames(permanova_unwuni_model_IPD)))
+
+# Homogeneïtat de les dispersions (PERMDISP)
+disp_unwuni_IPD <- permutest(betadisper(unwuni_matrix_IPD, alpha_IPD_metadata$study_period), permutations = 999)
+round(disp_unwuni_IPD$tab["Groups", "Pr(>F)"], 3)
+
+# Etiqueta amb el valor p i la R2
+unwuni_label_IPD <- paste0(format_p(permanova_unwuni_IPD$`Pr(>F)`[1]), "\n",       format_r2(permanova_unwuni_IPD$R2[1]))
+
+# Gràfic
+p_unwuni_IPD <- unwuni_pcoa_IPD$Vectors %>%
+    filter(SampleID %in% alpha_IPD_metadata$`sample-id`) %>%
+    left_join(alpha_IPD_metadata, by = c("SampleID" = "sample-id")) %>%
+    ggplot(aes(x = PC1, y = PC2, color = study_period, fill = study_period)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "#bdbdbd") +
+    geom_point(size = 2.5) +
+    xlab(paste0("PC1: ", round(100 * unwuni_pcoa_IPD$ProportionExplained[1], 2), "%")) +
+    ylab(paste0("PC2: ", round(100 * unwuni_pcoa_IPD$ProportionExplained[2], 2), "%")) +
+    scale_color_manual(values = c("prepandemic" = "#1F77B4", "postpandemic" = "#FF7F0E"),
+                       labels = c("prepandemic" = "Prepandèmic", "postpandemic" = "Postpandèmic"),
+                       name = "Període d'estudi") +
+    scale_fill_manual(values = c("prepandemic" = "#1F77B4", "postpandemic" = "#FF7F0E"), 
+                      guide = "none") +
+    stat_ellipse(geom = "polygon", alpha = 0.1, aes(fill = study_period)) +
+    theme_bw() + 
+    ggtitle("PCoA (unweighted UniFrac)") +
+    theme(plot.title = element_text(size = 14, hjust = 0.5),
+          axis.title = element_text(size = 13),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          axis.text = element_text(size = 10, color = "black"),
+          legend.position = "right",
+          panel.border = element_rect(linewidth = 0.8)) +
+    annotate("text", x = Inf, y = Inf, label = unwuni_label_IPD, 
+             hjust = 1.1, vjust = 1.5, size = 4)
+
+print(p_unwuni_IPD)
+ggsave("03_R/00_outputs/01_plots/p_unwuni_IPD.svg", p_unwuni_IPD, width = 6.5, height = 5, dpi = 300)
+```
+
+# Abundància diferencial
+
+## Infants sans
+
+```{r, fig.width=10, fig.height=4}
+# Fixació de la llavor
+set.seed(123)
+
+# Càrrega de la taula d'ASV i exclusió de la mostra B186
+table_healthy_matrix <- as.matrix(read_qza("02_qiime2/08_split_samples/healthy_table.qza")$data)
+table_healthy_matrix <- table_healthy_matrix[, colnames(table_healthy_matrix) != "B186"]
+
+# Preparació i alineació de la metadata (nivell de referència: prepandèmic)
+healthy <- as.data.frame(healthy)
+rownames(healthy) <- healthy$`#SampleID`
+healthy <- healthy[colnames(table_healthy_matrix), ]
+healthy$study_period <- relevel(healthy$study_period, ref = "prepandemic")
+
+# Ajust del model ANCOM-BC2 (a nivell d'ASV)
+ancombc2_multi_asv_healthy <- ancombc2(data = table_healthy_matrix,
+                                       meta_data = healthy,
+                                       fix_formula = "study_period + age + gender + res_mvr",
+                                       p_adj_method = "holm",
+                                       pseudo_sens = TRUE,
+                                       prv_cut = 0.10,
+                                       group = "study_period",
+                                       struc_zero = TRUE,
+                                       neg_lb = TRUE,
+                                       alpha = 0.05,
+                                       n_cl = 4)
+
+# Selecció dels tàxons amb abundància diferencial significativa
+ancombc2_multi_asv_healthy_res <- ancombc2_multi_asv_healthy$res %>%
+  filter(diff_study_periodpostpandemic == TRUE) %>%
+  arrange(q_study_periodpostpandemic) %>%
+  select(taxon, 
+  lfc_study_periodpostpandemic,
+  se_study_periodpostpandemic,
+  p_study_periodpostpandemic, 
+  q_study_periodpostpandemic,
+  passed_ss_study_periodpostpandemic)
+
+# Gràfic
+p_da_asv_healthy <- ancombc2_multi_asv_healthy_res %>%
+   mutate(taxon = recode(taxon, "69fe333f25e6046a874555d0730231c6" = "ASV1671; *Haemophilus_D_734546*",
+                                 "09403870435de24e0d1079059a287957" = "ASV544; *Micrococcus luteus*",
+                                 "52481542737754786cd8ae22689b7594" = "ASV1209; *Haemophilus_D_734546*",
+                                 "a4cd6152db4ba6371bd3d35fcda62a19" = "ASV115; *Streptococcus thermophilus*",
+                                 "add7f5d621120b854b4f1ab2f611089e" = "ASV1747; *Prevotella melaninogenica*",
+                                 "c33d6f34729b4388992daba22ff22edc" = "ASV1152; *Streptococcus*",
+                                 "571d1a0b0be4207e7f8c8f772047a11f" = "ASV1452; *Nanosynbacter*",
+                                 "b7942f4f3c2bb7b85f974d89ba64d59c" = "ASV980; *Capnocytophaga sputigena*",
+                                 "adaee256a34ff7012e77d1a26d82b874" = "ASV1090; *Rothia dentocariosa*",
+                                 "c52b8b3f55d39f44d9ad7c39d15e9db3" = "ASV951; Família Neisseriaceae",
+                                 "a67cb3fb1b18821c9ac0f05bd0ba26b1" = "ASV1078; *Porphyromonas_A pasteri*",
+                                 "62611dedc42201591d0c89973f903dde" = "ASV1784; *Staphylococcus hominis*",
+                                 "d59eb92ad1cea014dba32c409a075aff" = "ASV743; *Veillonella_A rogosae*",
+                                 "0a018c977acabf99cf7be6c718ff4c66" = "ASV1242; Família Pasteurellaceae",
+                                 "5497318e515a8c328a68f95975d9c7d4" = "ASV1618; *Staphylococcus*",
+                                 "e1ee0a34cdeed1b35c0d76410a513439" = "ASV325: *Rothia aeria*",
+                                 "0a1f5ed70dcb37a86924dbd5fde981af" = "ASV1168; *Moraxella_A*"),
+           direccio = ifelse(lfc_study_periodpostpandemic > 0, "Postpandèmia", "Prepandèmia"),
+           robust = ifelse(passed_ss_study_periodpostpandemic, "*", ""),
+           taxon = fct_reorder(taxon, lfc_study_periodpostpandemic)) %>%
+  ggplot(aes(x = lfc_study_periodpostpandemic, y = taxon, fill = direccio)) +
+  geom_col() +
+  geom_errorbar(aes(xmin = lfc_study_periodpostpandemic - se_study_periodpostpandemic,
+                    xmax = lfc_study_periodpostpandemic + se_study_periodpostpandemic),
+                width = 0.3, color = "black") +
+  geom_text(aes(label = robust,
+                x = ifelse(lfc_study_periodpostpandemic > 0,
+                           lfc_study_periodpostpandemic + se_study_periodpostpandemic + 0.3,
+                           lfc_study_periodpostpandemic - se_study_periodpostpandemic - 0.3)),
+            size = 6, vjust = 0.75) +
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.4) +
+  scale_x_continuous(breaks = seq(-6, 4, by = 1)) +
+  scale_fill_manual(values = c("Postpandèmia" = "#7B2CBF", "Prepandèmia" = "#2CA02C"),
+                    name = "Període d'estudi") +
+  labs(x = "Log fold change", y = NULL, title = "Abundància diferencial d'ASVs en infants sans") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, colour = "black"),
+        legend.text = element_text(size = 12),
+        plot.title = element_text(size = 12, hjust = 0.5),
+        legend.title = element_text(size = 12),
+        axis.text.y = element_markdown(),
+        panel.border = element_rect(linewidth = 0.8, fill = NA))
+
+print(p_da_asv_healthy)
+ggsave("03_R/00_outputs/01_plots/p_da_asv_healthy.svg", p_da_asv_healthy, width = 10, height = 4, dpi = 300)
+
+# Ajust del model ANCOM-BC2 (a nivell de gènere)
+table_l6_healthy_matrix <- as.matrix(table_l6_healthy)
+ancombc2_multi_genus_healthy <- ancombc2(data = table_l6_healthy_matrix,
+                                         meta_data = healthy,
+                                         fix_formula = "study_period + age + gender + res_mvr",
+                                         p_adj_method = "holm",
+                                         pseudo_sens = TRUE,
+                                         prv_cut = 0.10,
+                                         group = "study_period",
+                                         struc_zero = TRUE,
+                                         neg_lb = TRUE,
+                                         alpha = 0.05,
+                                         n_cl = 4)
+
+# Selecció dels tàxons amb abundància diferencial significativa
+ancombc2_multi_genus_healthy_res <- ancombc2_multi_genus_healthy$res %>%
+  filter(diff_study_periodpostpandemic == TRUE) %>%
+  arrange(q_study_periodpostpandemic) %>%
+  select(taxon, 
+  lfc_study_periodpostpandemic,
+  se_study_periodpostpandemic,
+  p_study_periodpostpandemic, 
+  q_study_periodpostpandemic,
+  passed_ss_study_periodpostpandemic)
+
+# Gràfic
+p_da_genus_healthy <- ancombc2_multi_genus_healthy_res %>%
+    mutate(taxon = recode(taxon, "d__Bacteria;p__Actinomycetota;c__Actinomycetes;o__Actinomycetales;f__Actinomycetaceae;g__Actinomyces" = "*Actinomyces*",
+                                 "d__Bacteria;p__Pseudomonadota;c__Alphaproteobacteria;o__Rhodobacterales;f__Rhodobacteraceae;g__Paracoccus" = "*Paracoccus*",
+                                 "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Burkholderiales;f__Burkholderiaceae_A_595421;__" = "Família Burkholderiaceae_A_595421",
+                                 "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Pseudomonadales_A_650611;f__Pseudomonadaceae;g__Pseudomonas_E_647464" = "*Pseudomonas_E_647464*",
+                                 "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales_737866;f__Pasteurellaceae;__" = "Família Pasteurellaceae",
+                                 "d__Bacteria;p__Patescibacteria;c__Saccharimonadia;o__Saccharimonadales;f__Nanosynbacteraceae;g__Nanosynbacter" = "*Nanosynbacter*",
+                                 "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales_737866;f__Pasteurellaceae;g__Haemophilus_D_736121" = "*Haemophilus_D_736121*",
+                                 "d__Bacteria;p__Actinomycetota;c__Actinomycetes;o__Actinomycetales;f__Micrococcaceae;g__Micrococcus" = "*Micrococcus*",
+                                 "d__Bacteria;p__Fusobacteriota;c__Fusobacteriia;o__Fusobacteriales;f__Fusobacteriaceae;g__Fusobacterium_C" = "*Fusobacterium_C*",
+                                 "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Burkholderiales;f__Neisseriaceae;g__" = "Família Neisseriaceae"),
+           direccio = ifelse(lfc_study_periodpostpandemic > 0, "Postpandèmia", "Prepandèmia"),
+           robust = ifelse(passed_ss_study_periodpostpandemic, "*", ""),
+           taxon = fct_reorder(taxon, lfc_study_periodpostpandemic)) %>%
+  ggplot(aes(x = lfc_study_periodpostpandemic, y = taxon, fill = direccio)) +
+  geom_col() +
+  geom_errorbar(aes(xmin = lfc_study_periodpostpandemic - se_study_periodpostpandemic,
+                    xmax = lfc_study_periodpostpandemic + se_study_periodpostpandemic),
+                width = 0.3, color = "black") +
+  geom_text(aes(label = robust,
+                x = ifelse(lfc_study_periodpostpandemic > 0,
+                           lfc_study_periodpostpandemic + se_study_periodpostpandemic + 0.3,
+                           lfc_study_periodpostpandemic - se_study_periodpostpandemic - 0.3)),
+            size = 6, vjust = 0.75) +
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.4) +
+  scale_x_continuous(breaks = seq(-3, 3, by = 1)) +
+  scale_fill_manual(values = c("Postpandèmia" = "#7B2CBF", "Prepandèmia" = "#2CA02C"),
+                    name = "Període d'estudi") +
+  labs(x = "Log fold change", 
+       y = NULL,
+       title = "Abundància diferencial de gèneres en infants sans") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, colour = "black"),
+        legend.text = element_text(size = 12),
+        plot.title = element_text(size = 12, hjust = 0.5),
+        legend.title = element_text(size = 12),
+        axis.text.y = element_markdown(),
+        panel.border = element_rect(linewidth = 0.8, fill = NA))
+
+print(p_da_genus_healthy)
+ggsave("03_R/00_outputs/01_plots/p_da_genus_healthy.svg", p_da_genus_healthy, width = 10, height = 4, dpi = 300)
+```
+
+## Infants amb MPI
+
+```{r, fig.width=10, fig.height=4}
+# Fixació de la llavor
+set.seed(123)
+
+# Càrrega de la taula d'ASV
+table_IPD_matrix <- as.matrix(read_qza("02_qiime2/08_split_samples/IPD_table.qza")$data)
+
+# Preparació i alineació de la metadata (nivell de referència: prepandèmic)
+IPD <- as.data.frame(IPD)
+rownames(IPD) <- IPD$`#SampleID`
+IPD <- IPD[colnames(table_IPD_matrix), ]
+IPD$study_period <- relevel(IPD$study_period, ref = "prepandemic")
+
+# Ajust del model ANCOM-BC2 (a nivell d'ASV)
+ancombc2_multi_asv_IPD <- ancombc2(data = table_IPD_matrix,
+                                   meta_data = IPD,
+                                   fix_formula = "study_period + age + gender + res_mvr",
+                                   p_adj_method = "holm",
+                                   pseudo_sens = TRUE,
+                                   prv_cut = 0.10,
+                                   group = "study_period",
+                                   struc_zero = TRUE,
+                                   neg_lb = TRUE,
+                                   alpha = 0.05,
+                                   n_cl = 4)
+
+# Selecció dels tàxons amb abundància diferencial significativa
+ancombc2_multi_asv_IPD_res <- ancombc2_multi_asv_IPD$res %>%
+  filter(diff_study_periodpostpandemic == TRUE) %>%
+  arrange(q_study_periodpostpandemic) %>%
+  select(taxon, 
+  lfc_study_periodpostpandemic,
+  se_study_periodpostpandemic,
+  p_study_periodpostpandemic, 
+  q_study_periodpostpandemic,
+  passed_ss_study_periodpostpandemic)
+
+# Gràfic
+p_da_asv_IPD <- ancombc2_multi_asv_IPD_res %>%
+    mutate(taxon = recode(taxon, "18eb929cf9350e0af65cf863c2786858" = "ASV647; *Haemophilus_D_735815*",
+                                 "d4e740bc5c2587cbbb188e8e30026611" = "ASV1336; *Corynebacterium tuberculostearicum*",
+                                 "409f711b59152d57926cf444c5577087" = "ASV541; *Streptococcus*",
+                                 "1efa2e9ca8d9d0128928e26097941fb2" = "ASV1095; *Neisseria_563205*",
+                                 "5c7cd4afe047a1fa454b6a815a951c2f" = "ASV96; *Veillonella_A atypica*",
+                                 "9d66bd49ae60477c6c2839da1f80f58e" = "ASV660; *Haemophilus_D_734546*"),
+           direccio = ifelse(lfc_study_periodpostpandemic > 0, "Postpandèmia", "Prepandèmia"),
+           robust = ifelse(passed_ss_study_periodpostpandemic, "*", ""),
+           taxon = fct_reorder(taxon, lfc_study_periodpostpandemic)) %>%
+  ggplot(aes(x = lfc_study_periodpostpandemic, y = taxon, fill = direccio)) +
+  geom_col() +
+  geom_errorbar(aes(xmin = lfc_study_periodpostpandemic - se_study_periodpostpandemic,
+                    xmax = lfc_study_periodpostpandemic + se_study_periodpostpandemic),
+                width = 0.3, color = "black") +
+  geom_text(aes(label = robust,
+                x = ifelse(lfc_study_periodpostpandemic > 0,
+                           lfc_study_periodpostpandemic + se_study_periodpostpandemic + 0.3,
+                           lfc_study_periodpostpandemic - se_study_periodpostpandemic - 0.3)),
+            size = 6, vjust = 0.75) +
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.4) +
+  scale_x_continuous(breaks = seq(-6, 4, by = 1)) +
+  scale_fill_manual(values = c("Postpandèmia" = "#FF7F0E", "Prepandèmia" = "#1F77B4"),
+                    name = "Període d'estudi") +
+  labs(x = "Log fold change", y = NULL, title = "Abundància diferencial d'ASVs en infants amb MPI") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, colour = "black"),
+        legend.text = element_text(size = 12),
+        plot.title = element_text(size = 12, hjust = 0.5),
+        legend.title = element_text(size = 12),
+        axis.text.y = element_markdown(),
+        panel.border = element_rect(linewidth = 0.8, fill = NA))
+
+print(p_da_asv_IPD)
+ggsave("03_R/00_outputs/01_plots/p_da_asv_IPD.svg", p_da_asv_IPD, width = 10, height = 3, dpi = 300)
+
+# Ajust del model ANCOM-BC2 (a nivell de gènere)
+table_l6_IPD_matrix <- as.matrix(table_l6_IPD)
+ancombc2_multi_genus_IPD <- ancombc2(data = table_l6_IPD_matrix,
+                                     meta_data = IPD,
+                                     fix_formula = "study_period + age + gender + res_mvr",
+                                     p_adj_method = "holm",
+                                     pseudo_sens = TRUE,
+                                     prv_cut = 0.10,
+                                     group = "study_period",
+                                     struc_zero = TRUE,
+                                     neg_lb = TRUE,
+                                     alpha = 0.05,
+                                     n_cl = 4)
+
+# Selecció dels tàxons amb abundància diferencial significativa
+ancombc2_multi_genus_IPD_res <- ancombc2_multi_genus_IPD$res %>%
+  filter(diff_study_periodpostpandemic == TRUE) %>%
+  arrange(q_study_periodpostpandemic) %>%
+  select(taxon, 
+  lfc_study_periodpostpandemic,
+  se_study_periodpostpandemic,
+  p_study_periodpostpandemic, 
+  q_study_periodpostpandemic,
+  passed_ss_study_periodpostpandemic)
+
+# Gràfic
+p_da_genus_IPD <- ancombc2_multi_genus_IPD_res %>%
+    mutate(taxon = recode(taxon, "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales_737866;f__Pasteurellaceae;g__Haemophilus_D_735815" = "*Haemophilus_D_735815*",
+                                 "d__Bacteria;p__Bacteroidota;c__Bacteroidia;o__Flavobacteriales_B_877923;f__Weeksellaceae;__" = "Família Weeksellaceae",
+                                 "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Pseudomonadales_A_660879;f__Moraxellaceae;g__Moraxella_A" = "*Moraxella_A*",
+                                 "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Pseudomonadales_A_650611;f__Pseudomonadaceae;g__Pseudomonas_E_647464" = "*Pseudomonas_E_647464*",
+                                 "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Pseudomonadales_A_660879;f__Moraxellaceae;g__Moraxella_C_651731" = "*Moraxella_C_651731*"),
+           direccio = ifelse(lfc_study_periodpostpandemic > 0, "Postpandèmia", "Prepandèmia"),
+           robust = ifelse(passed_ss_study_periodpostpandemic, "*", ""),
+           taxon = fct_reorder(taxon, lfc_study_periodpostpandemic)) %>%
+  ggplot(aes(x = lfc_study_periodpostpandemic, y = taxon, fill = direccio)) +
+  geom_col() +
+  geom_errorbar(aes(xmin = lfc_study_periodpostpandemic - se_study_periodpostpandemic,
+                    xmax = lfc_study_periodpostpandemic + se_study_periodpostpandemic),
+                width = 0.3, color = "black") +
+  geom_text(aes(label = robust,
+                x = ifelse(lfc_study_periodpostpandemic > 0,
+                           lfc_study_periodpostpandemic + se_study_periodpostpandemic + 0.3,
+                           lfc_study_periodpostpandemic - se_study_periodpostpandemic - 0.3)),
+            size = 6, vjust = 0.75) +
+  geom_vline(xintercept = 0, color = "black", linewidth = 0.4) +
+  scale_x_continuous(breaks = seq(-6, 6, by = 1)) +
+  scale_fill_manual(values = c("Postpandèmia" = "#FF7F0E", "Prepandèmia" = "#1F77B4"),
+                    name = "Període d'estudi") +
+  labs(x = "Log fold change", 
+       y = NULL,
+       title = "Abundància diferencial de gèneres en infants amb MPI") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, colour = "black"),
+        legend.text = element_text(size = 12),
+        plot.title = element_text(size = 12, hjust = 0.5),
+        legend.title = element_text(size = 12),
+        axis.text.y = element_markdown(),
+        panel.border = element_rect(linewidth = 0.8, fill = NA))
+
+print(p_da_genus_IPD)
+ggsave("03_R/00_outputs/01_plots/p_da_genus_IPD.svg", p_da_genus_IPD, width = 10, height = 3, dpi = 300)
+```
